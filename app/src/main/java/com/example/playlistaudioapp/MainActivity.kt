@@ -46,7 +46,9 @@ class MainActivity : ComponentActivity() {
     private var playlistUrlState by mutableStateOf("")
     private var folderNameState by mutableStateOf("")
     private var areLogsVisible by mutableStateOf(false)
+
     private val outputFormat = "MP3"
+    private val selectedEngineName = "Fake MP3 Engine"
 
     private val folderPickerLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -88,6 +90,7 @@ class MainActivity : ComponentActivity() {
                 isProcessing = isProcessing,
                 areLogsVisible = areLogsVisible,
                 outputFormat = outputFormat,
+                selectedEngineName = selectedEngineName,
                 onPlaylistUrlChange = {
                     playlistUrlState = it
                     savePlaylistUrl(it)
@@ -139,8 +142,9 @@ class MainActivity : ComponentActivity() {
         isProcessing = true
         statusTextState = "Working"
         addLog("Download job started")
+        addLog("Selected engine: $selectedEngineName")
 
-        val result = runFakeMp3Engine(
+        val result = runSelectedEngine(
             folderUri = folderUri,
             playlistUrl = playlistUrl,
             folderName = folderName
@@ -154,6 +158,21 @@ class MainActivity : ComponentActivity() {
 
         addLog(result)
         isProcessing = false
+    }
+
+    private suspend fun runSelectedEngine(
+        folderUri: Uri,
+        playlistUrl: String,
+        folderName: String
+    ): String {
+        return when (selectedEngineName) {
+            "Fake MP3 Engine" -> runFakeMp3Engine(
+                folderUri = folderUri,
+                playlistUrl = playlistUrl,
+                folderName = folderName
+            )
+            else -> "Error: Unknown engine selected"
+        }
     }
 
     private suspend fun runFakeMp3Engine(
@@ -303,6 +322,9 @@ class MainActivity : ComponentActivity() {
                 
                 Output Format:
                 $outputFormat
+                
+                Engine:
+                $selectedEngineName
             """.trimIndent()
 
             contentResolver.openOutputStream(testFile.uri, "wt")?.use { outputStream ->
@@ -314,6 +336,7 @@ class MainActivity : ComponentActivity() {
                 Subfolder: $safeFolderName
                 File: test.txt
                 Format: $outputFormat
+                Engine: $selectedEngineName
             """.trimIndent()
         } catch (e: Exception) {
             "Error while preparing MP3 file: ${e.message}"
@@ -331,6 +354,7 @@ fun PlaylistAudioAppScreen(
     isProcessing: Boolean,
     areLogsVisible: Boolean,
     outputFormat: String,
+    selectedEngineName: String,
     onPlaylistUrlChange: (String) -> Unit,
     onFolderNameChange: (String) -> Unit,
     onChooseFolderClick: () -> Unit,
@@ -355,6 +379,11 @@ fun PlaylistAudioAppScreen(
 
             Text(
                 text = "Output format: $outputFormat",
+                fontSize = 16.sp
+            )
+
+            Text(
+                text = "Engine: $selectedEngineName",
                 fontSize = 16.sp
             )
 
