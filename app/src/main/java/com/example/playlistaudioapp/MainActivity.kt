@@ -27,6 +27,7 @@ import androidx.documentfile.provider.DocumentFile
 class MainActivity : ComponentActivity() {
 
     private var selectedFolderUri by mutableStateOf<Uri?>(null)
+    private var selectedFolderLabel by mutableStateOf("No folder selected yet")
     private var logTextState by mutableStateOf("Logs will appear here...")
 
     private val folderPickerLauncher =
@@ -38,7 +39,8 @@ class MainActivity : ComponentActivity() {
                 )
 
                 selectedFolderUri = uri
-                logTextState = "Folder selected:\n$uri"
+                selectedFolderLabel = extractFolderLabel(uri)
+                logTextState = "Folder selected successfully"
             } else {
                 logTextState = "Folder selection canceled"
             }
@@ -50,7 +52,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PlaylistAudioAppScreen(
-                selectedFolderUri = selectedFolderUri,
+                selectedFolderLabel = selectedFolderLabel,
                 logText = logTextState,
                 onChooseFolderClick = {
                     folderPickerLauncher.launch(null)
@@ -76,6 +78,18 @@ class MainActivity : ComponentActivity() {
                     logTextState = result
                 }
             )
+        }
+    }
+
+    private fun extractFolderLabel(uri: Uri): String {
+        val raw = uri.toString()
+        return when {
+            raw.contains("primary%3AMusic") -> "Music"
+            raw.contains("primary%3ADownload") -> "Download"
+            raw.contains("primary%3ADocuments") -> "Documents"
+            raw.contains("primary%3APictures") -> "Pictures"
+            raw.contains("primary%3AMovies") -> "Movies"
+            else -> "Custom folder selected"
         }
     }
 
@@ -147,9 +161,6 @@ class MainActivity : ComponentActivity() {
             """
                 Test file created successfully
                 
-                Folder URI:
-                $folderUri
-                
                 Subfolder:
                 $safeFolderName
                 
@@ -164,7 +175,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun PlaylistAudioAppScreen(
-    selectedFolderUri: Uri?,
+    selectedFolderLabel: String,
     logText: String,
     onChooseFolderClick: () -> Unit,
     onStartDownloadClick: (String, String) -> Unit
@@ -219,11 +230,7 @@ fun PlaylistAudioAppScreen(
             }
 
             Text(
-                text = if (selectedFolderUri != null) {
-                    "Selected folder is ready"
-                } else {
-                    "No folder selected yet"
-                },
+                text = "Selected folder: $selectedFolderLabel",
                 fontSize = 16.sp
             )
 
