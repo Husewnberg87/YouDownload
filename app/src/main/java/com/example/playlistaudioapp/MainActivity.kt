@@ -1,5 +1,8 @@
 package com.example.playlistaudioapp
 
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -19,7 +22,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +38,10 @@ class MainActivity : ComponentActivity() {
     private var selectedFolderUri by mutableStateOf<Uri?>(null)
     private var selectedFolderLabel by mutableStateOf("No folder selected yet")
     private var logTextState by mutableStateOf("Logs will appear here...")
+    private var statusTextState by mutableStateOf("Idle")
+    private var isProcessing by mutableStateOf(false)
+    private var playlistUrlState by mutableStateOf("")
+    private var folderNameState by mutableStateOf("")
 
     private val folderPickerLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -45,8 +55,10 @@ class MainActivity : ComponentActivity() {
                 selectedFolderLabel = extractFolderLabel(uri)
                 saveFolderUri(uri)
 
+                statusTextState = "Ready"
                 logTextState = "Folder selected successfully"
             } else {
+                statusTextState = "Idle"
                 logTextState = "Folder selection canceled"
             }
         }
@@ -56,29 +68,35 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         prefs = getSharedPreferences("playlist_audio_app_prefs", Context.MODE_PRIVATE)
+
+        playlistUrlState = loadSavedPlaylistUrl()
+        folderNameState = loadSavedFolderName()
         restoreSavedFolder()
 
         setContent {
-            var playlistUrl by remember { mutableStateOf(loadSavedPlaylistUrl()) }
-            var folderName by remember { mutableStateOf(loadSavedFolderName()) }
-
             PlaylistAudioAppScreen(
-                playlistUrl = playlistUrl,
-                folderName = folderName,
+                playlistUrl = playlistUrlState,
+                folderName = folderNameState,
                 selectedFolderLabel = selectedFolderLabel,
+                statusText = statusTextState,
                 logText = logTextState,
+                isProcessing = isProcessing,
                 onPlaylistUrlChange = {
-                    playlistUrl = it
+                    playlistUrlState = it
                     savePlaylistUrl(it)
                 },
                 onFolderNameChange = {
-                    folderName = it
+                    folderNameState = it
                     saveFolderName(it)
                 },
                 onChooseFolderClick = {
-                    folderPickerLauncher.launch(null)
+                    if (!isProcessing) {
+                        folderPickerLauncher.launch(null)
+                    }
                 },
                 onStartDownloadClick = { currentPlaylistUrl, currentFolderName ->
+                    if (isProcessing) return@PlaylistAudioAppScreen
+
                     val validationMessage = validateInputs(
                         playlistUrl = currentPlaylistUrl,
                         folderName = currentFolderName,
@@ -86,17 +104,34 @@ class MainActivity : ComponentActivity() {
                     )
 
                     if (validationMessage != null) {
+                        statusTextState = "Error"
                         logTextState = validationMessage
                         return@PlaylistAudioAppScreen
                     }
 
-                    val result = createTestFile(
-                        folderUri = selectedFolderUri!!,
-                        playlistUrl = currentPlaylistUrl.trim(),
-                        folderName = currentFolderName.trim()
-                    )
+                    isProcessing = true
+                    statusTextState = "Working"
+                    logTextState = "Creating test file..."
 
-                    logTextState = result
+                    lifecycleScope.launch {
+                        delay(2000)
+
+                        val result = createTestFile(
+                            folderUri = selectedFolderUri!!,
+                            playlistUrl = currentPlaylistUrl.trim(),
+                            folderName = currentFolderName.trim()
+                        )
+
+                        isProcessing = false
+
+                        if (result.startsWith("Test file created successfully")) {
+                            statusTextState = "Success"
+                        } else {
+                            statusTextState = "Error"
+                        }
+
+                        logTextState = result
+                    }
                 }
             )
         }
@@ -129,6 +164,7 @@ class MainActivity : ComponentActivity() {
             val uri = Uri.parse(savedUriString)
             selectedFolderUri = uri
             selectedFolderLabel = extractFolderLabel(uri)
+            statusTextState = "Ready"
             logTextState = "Previous folder restored"
         }
     }
@@ -230,7 +266,9 @@ fun PlaylistAudioAppScreen(
     playlistUrl: String,
     folderName: String,
     selectedFolderLabel: String,
+    statusText: String,
     logText: String,
+    isProcessing: Boolean,
     onPlaylistUrlChange: (String) -> Unit,
     onFolderNameChange: (String) -> Unit,
     onChooseFolderClick: () -> Unit,
@@ -256,19 +294,22 @@ fun PlaylistAudioAppScreen(
                 value = playlistUrl,
                 onValueChange = onPlaylistUrlChange,
                 label = { Text("Enter playlist URL") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isProcessing
             )
 
             OutlinedTextField(
                 value = folderName,
                 onValueChange = onFolderNameChange,
                 label = { Text("Enter folder name") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isProcessing
             )
 
             Button(
                 onClick = onChooseFolderClick,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isProcessing
             ) {
                 Text("Choose Folder")
             }
@@ -277,9 +318,16 @@ fun PlaylistAudioAppScreen(
                 onClick = {
                     onStartDownloadClick(playlistUrl, folderName)
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isProcessing
             ) {
-                Text("Start Download")
+                Text(
+                    if (isProcessing) {
+                        "Working..."
+                    } else {
+                        "Start Download"
+                    }
+                )
             }
 
             Text(
@@ -288,9 +336,19 @@ fun PlaylistAudioAppScreen(
             )
 
             Text(
+                text = "Status: $statusText",
+                fontSize = 16.sp
+            )
+
+            Text(
+                text = "Log:",
+                fontSize = 16.sp
+            )
+
+            Text(
                 text = logText,
                 fontSize = 16.sp,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
     }
