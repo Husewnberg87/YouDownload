@@ -56,16 +56,51 @@ class MainActivity : ComponentActivity() {
                     folderPickerLauncher.launch(null)
                 },
                 onStartDownloadClick = { playlistUrl, folderName ->
-                    if (selectedFolderUri == null) {
-                        logTextState = "Please choose a folder first"
+                    val validationMessage = validateInputs(
+                        playlistUrl = playlistUrl,
+                        folderName = folderName,
+                        folderUri = selectedFolderUri
+                    )
+
+                    if (validationMessage != null) {
+                        logTextState = validationMessage
                         return@PlaylistAudioAppScreen
                     }
 
-                    val result = createTestFile(selectedFolderUri!!, playlistUrl, folderName)
+                    val result = createTestFile(
+                        folderUri = selectedFolderUri!!,
+                        playlistUrl = playlistUrl.trim(),
+                        folderName = folderName.trim()
+                    )
+
                     logTextState = result
                 }
             )
         }
+    }
+
+    private fun validateInputs(
+        playlistUrl: String,
+        folderName: String,
+        folderUri: Uri?
+    ): String? {
+        if (playlistUrl.trim().isEmpty()) {
+            return "Error: Please enter a playlist URL"
+        }
+
+        if (!playlistUrl.startsWith("http://") && !playlistUrl.startsWith("https://")) {
+            return "Error: Playlist URL must start with http:// or https://"
+        }
+
+        if (folderName.trim().isEmpty()) {
+            return "Error: Please enter a folder name"
+        }
+
+        if (folderUri == null) {
+            return "Error: Please choose a folder first"
+        }
+
+        return null
     }
 
     private fun createTestFile(folderUri: Uri, playlistUrl: String, folderName: String): String {
@@ -73,9 +108,16 @@ class MainActivity : ComponentActivity() {
             val pickedFolder = DocumentFile.fromTreeUri(this, folderUri)
                 ?: return "Could not access selected folder"
 
-            val appFolderName = if (folderName.isBlank()) "MyPlaylistFolder" else folderName
-            val targetFolder = pickedFolder.findFile(appFolderName)
-                ?: pickedFolder.createDirectory(appFolderName)
+            val safeFolderName = folderName
+                .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                .trim()
+
+            if (safeFolderName.isEmpty()) {
+                return "Error: Folder name contains only invalid characters"
+            }
+
+            val targetFolder = pickedFolder.findFile(safeFolderName)
+                ?: pickedFolder.createDirectory(safeFolderName)
 
             if (targetFolder == null || !targetFolder.isDirectory) {
                 return "Could not create target folder"
@@ -109,7 +151,7 @@ class MainActivity : ComponentActivity() {
                 $folderUri
                 
                 Subfolder:
-                $appFolderName
+                $safeFolderName
                 
                 File:
                 test.txt
