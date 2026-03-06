@@ -1,6 +1,7 @@
 package com.example.playlistaudioapp
 
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.content.Context
 import android.content.Intent
@@ -113,26 +114,12 @@ class MainActivity : ComponentActivity() {
                         return@PlaylistAudioAppScreen
                     }
 
-                    isProcessing = true
-                    statusTextState = "Working"
-                    addLog("Creating test file...")
-
                     lifecycleScope.launch {
-                        val result = createTestFile(
+                        runDownloadJob(
                             folderUri = selectedFolderUri!!,
                             playlistUrl = currentPlaylistUrl.trim(),
                             folderName = currentFolderName.trim()
                         )
-
-                        isProcessing = false
-
-                        if (result.startsWith("Test file created successfully")) {
-                            statusTextState = "Success"
-                        } else {
-                            statusTextState = "Error"
-                        }
-
-                        addLog(result)
                     }
                 },
                 onToggleLogsClick = {
@@ -140,6 +127,48 @@ class MainActivity : ComponentActivity() {
                 }
             )
         }
+    }
+
+    private suspend fun runDownloadJob(
+        folderUri: Uri,
+        playlistUrl: String,
+        folderName: String
+    ) {
+        isProcessing = true
+        statusTextState = "Working"
+
+        addLog("Download job started")
+        delay(400)
+
+        addLog("Reading playlist URL")
+        delay(400)
+
+        addLog("Preparing target folder")
+        delay(400)
+
+        addLog("Simulating audio extraction")
+        delay(500)
+
+        addLog("Simulating MP3 conversion")
+        delay(500)
+
+        addLog("Writing output file")
+        delay(400)
+
+        val result = createTestFile(
+            folderUri = folderUri,
+            playlistUrl = playlistUrl,
+            folderName = folderName
+        )
+
+        if (result.startsWith("Test file created successfully")) {
+            statusTextState = "Success"
+        } else {
+            statusTextState = "Error"
+        }
+
+        addLog(result)
+        isProcessing = false
     }
 
     private fun addLog(message: String) {
@@ -359,11 +388,7 @@ fun PlaylistAudioAppScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    if (areLogsVisible) {
-                        "Hide Logs"
-                    } else {
-                        "Show Logs"
-                    }
+                    if (areLogsVisible) "Hide Logs" else "Show Logs"
                 )
             }
 
