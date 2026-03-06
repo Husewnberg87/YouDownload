@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
     private var playlistUrlState by mutableStateOf("")
     private var folderNameState by mutableStateOf("")
     private var areLogsVisible by mutableStateOf(false)
+    private val outputFormat = "MP3"
 
     private val folderPickerLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -86,6 +87,7 @@ class MainActivity : ComponentActivity() {
                 logText = logTextState,
                 isProcessing = isProcessing,
                 areLogsVisible = areLogsVisible,
+                outputFormat = outputFormat,
                 onPlaylistUrlChange = {
                     playlistUrlState = it
                     savePlaylistUrl(it)
@@ -136,8 +138,30 @@ class MainActivity : ComponentActivity() {
     ) {
         isProcessing = true
         statusTextState = "Working"
-
         addLog("Download job started")
+
+        val result = runFakeMp3Engine(
+            folderUri = folderUri,
+            playlistUrl = playlistUrl,
+            folderName = folderName
+        )
+
+        if (result.startsWith("MP3 file prepared successfully")) {
+            statusTextState = "Success"
+        } else {
+            statusTextState = "Error"
+        }
+
+        addLog(result)
+        isProcessing = false
+    }
+
+    private suspend fun runFakeMp3Engine(
+        folderUri: Uri,
+        playlistUrl: String,
+        folderName: String
+    ): String {
+        addLog("MP3 engine started")
         delay(400)
 
         addLog("Reading playlist URL")
@@ -155,20 +179,11 @@ class MainActivity : ComponentActivity() {
         addLog("Writing output file")
         delay(400)
 
-        val result = createTestFile(
+        return createTestFile(
             folderUri = folderUri,
             playlistUrl = playlistUrl,
             folderName = folderName
         )
-
-        if (result.startsWith("Test file created successfully")) {
-            statusTextState = "Success"
-        } else {
-            statusTextState = "Error"
-        }
-
-        addLog(result)
-        isProcessing = false
     }
 
     private fun addLog(message: String) {
@@ -267,14 +282,14 @@ class MainActivity : ComponentActivity() {
                 ?: pickedFolder.createDirectory(safeFolderName)
 
             if (targetFolder == null || !targetFolder.isDirectory) {
-                return "Could not create target folder"
+                return "Error: Could not create target folder"
             }
 
             val existingFile = targetFolder.findFile("test.txt")
             val testFile = existingFile ?: targetFolder.createFile("text/plain", "test")
 
             if (testFile == null) {
-                return "Could not create test.txt"
+                return "Error: Could not create test.txt"
             }
 
             val content = """
@@ -285,19 +300,23 @@ class MainActivity : ComponentActivity() {
                 
                 Folder Name:
                 $folderName
+                
+                Output Format:
+                $outputFormat
             """.trimIndent()
 
             contentResolver.openOutputStream(testFile.uri, "wt")?.use { outputStream ->
                 outputStream.write(content.toByteArray())
-            } ?: return "Could not open file output stream"
+            } ?: return "Error: Could not open file output stream"
 
             """
-                Test file created successfully
+                MP3 file prepared successfully
                 Subfolder: $safeFolderName
                 File: test.txt
+                Format: $outputFormat
             """.trimIndent()
         } catch (e: Exception) {
-            "Error while creating test file: ${e.message}"
+            "Error while preparing MP3 file: ${e.message}"
         }
     }
 }
@@ -311,6 +330,7 @@ fun PlaylistAudioAppScreen(
     logText: String,
     isProcessing: Boolean,
     areLogsVisible: Boolean,
+    outputFormat: String,
     onPlaylistUrlChange: (String) -> Unit,
     onFolderNameChange: (String) -> Unit,
     onChooseFolderClick: () -> Unit,
@@ -331,6 +351,11 @@ fun PlaylistAudioAppScreen(
             Text(
                 text = "Playlist Audio Downloader",
                 fontSize = 24.sp
+            )
+
+            Text(
+                text = "Output format: $outputFormat",
+                fontSize = 16.sp
             )
 
             OutlinedTextField(
@@ -387,9 +412,7 @@ fun PlaylistAudioAppScreen(
                 onClick = onToggleLogsClick,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    if (areLogsVisible) "Hide Logs" else "Show Logs"
-                )
+                Text(if (areLogsVisible) "Hide Logs" else "Show Logs")
             }
 
             if (areLogsVisible) {
