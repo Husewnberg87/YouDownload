@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.documentfile.provider.DocumentFile
 
 class MainActivity : ComponentActivity() {
 
@@ -55,15 +56,66 @@ class MainActivity : ComponentActivity() {
                     folderPickerLauncher.launch(null)
                 },
                 onStartDownloadClick = { playlistUrl, folderName ->
-                    logTextState = """
-                        Start Download button clicked
-                        
-                        Playlist URL: $playlistUrl
-                        Folder Name: $folderName
-                        Selected Folder: ${selectedFolderUri ?: "No folder selected"}
-                    """.trimIndent()
+                    if (selectedFolderUri == null) {
+                        logTextState = "Please choose a folder first"
+                        return@PlaylistAudioAppScreen
+                    }
+
+                    val result = createTestFile(selectedFolderUri!!, playlistUrl, folderName)
+                    logTextState = result
                 }
             )
+        }
+    }
+
+    private fun createTestFile(folderUri: Uri, playlistUrl: String, folderName: String): String {
+        return try {
+            val pickedFolder = DocumentFile.fromTreeUri(this, folderUri)
+                ?: return "Could not access selected folder"
+
+            val appFolderName = if (folderName.isBlank()) "MyPlaylistFolder" else folderName
+            val targetFolder = pickedFolder.findFile(appFolderName)
+                ?: pickedFolder.createDirectory(appFolderName)
+
+            if (targetFolder == null || !targetFolder.isDirectory) {
+                return "Could not create target folder"
+            }
+
+            val existingFile = targetFolder.findFile("test.txt")
+            val testFile = existingFile ?: targetFolder.createFile("text/plain", "test")
+
+            if (testFile == null) {
+                return "Could not create test.txt"
+            }
+
+            val content = """
+                PlaylistAudioApp test file
+                
+                Playlist URL:
+                $playlistUrl
+                
+                Folder Name:
+                $folderName
+            """.trimIndent()
+
+            contentResolver.openOutputStream(testFile.uri, "wt")?.use { outputStream ->
+                outputStream.write(content.toByteArray())
+            } ?: return "Could not open file output stream"
+
+            """
+                Test file created successfully
+                
+                Folder URI:
+                $folderUri
+                
+                Subfolder:
+                $appFolderName
+                
+                File:
+                test.txt
+            """.trimIndent()
+        } catch (e: Exception) {
+            "Error while creating test file:\n${e.message}"
         }
     }
 }
