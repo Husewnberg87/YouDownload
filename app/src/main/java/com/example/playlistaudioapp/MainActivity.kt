@@ -1,5 +1,6 @@
 package com.example.playlistaudioapp
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -26,6 +27,8 @@ import androidx.documentfile.provider.DocumentFile
 
 class MainActivity : ComponentActivity() {
 
+    private lateinit var prefs: android.content.SharedPreferences
+
     private var selectedFolderUri by mutableStateOf<Uri?>(null)
     private var selectedFolderLabel by mutableStateOf("No folder selected yet")
     private var logTextState by mutableStateOf("Logs will appear here...")
@@ -40,6 +43,8 @@ class MainActivity : ComponentActivity() {
 
                 selectedFolderUri = uri
                 selectedFolderLabel = extractFolderLabel(uri)
+                saveFolderUri(uri)
+
                 logTextState = "Folder selected successfully"
             } else {
                 logTextState = "Folder selection canceled"
@@ -50,17 +55,33 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        prefs = getSharedPreferences("playlist_audio_app_prefs", Context.MODE_PRIVATE)
+        restoreSavedFolder()
+
         setContent {
+            var playlistUrl by remember { mutableStateOf(loadSavedPlaylistUrl()) }
+            var folderName by remember { mutableStateOf(loadSavedFolderName()) }
+
             PlaylistAudioAppScreen(
+                playlistUrl = playlistUrl,
+                folderName = folderName,
                 selectedFolderLabel = selectedFolderLabel,
                 logText = logTextState,
+                onPlaylistUrlChange = {
+                    playlistUrl = it
+                    savePlaylistUrl(it)
+                },
+                onFolderNameChange = {
+                    folderName = it
+                    saveFolderName(it)
+                },
                 onChooseFolderClick = {
                     folderPickerLauncher.launch(null)
                 },
-                onStartDownloadClick = { playlistUrl, folderName ->
+                onStartDownloadClick = { currentPlaylistUrl, currentFolderName ->
                     val validationMessage = validateInputs(
-                        playlistUrl = playlistUrl,
-                        folderName = folderName,
+                        playlistUrl = currentPlaylistUrl,
+                        folderName = currentFolderName,
                         folderUri = selectedFolderUri
                     )
 
@@ -71,13 +92,44 @@ class MainActivity : ComponentActivity() {
 
                     val result = createTestFile(
                         folderUri = selectedFolderUri!!,
-                        playlistUrl = playlistUrl.trim(),
-                        folderName = folderName.trim()
+                        playlistUrl = currentPlaylistUrl.trim(),
+                        folderName = currentFolderName.trim()
                     )
 
                     logTextState = result
                 }
             )
+        }
+    }
+
+    private fun saveFolderUri(uri: Uri) {
+        prefs.edit().putString("selected_folder_uri", uri.toString()).apply()
+    }
+
+    private fun savePlaylistUrl(url: String) {
+        prefs.edit().putString("playlist_url", url).apply()
+    }
+
+    private fun saveFolderName(name: String) {
+        prefs.edit().putString("folder_name", name).apply()
+    }
+
+    private fun loadSavedPlaylistUrl(): String {
+        return prefs.getString("playlist_url", "") ?: ""
+    }
+
+    private fun loadSavedFolderName(): String {
+        return prefs.getString("folder_name", "") ?: ""
+    }
+
+    private fun restoreSavedFolder() {
+        val savedUriString = prefs.getString("selected_folder_uri", null)
+
+        if (!savedUriString.isNullOrBlank()) {
+            val uri = Uri.parse(savedUriString)
+            selectedFolderUri = uri
+            selectedFolderLabel = extractFolderLabel(uri)
+            logTextState = "Previous folder restored"
         }
     }
 
@@ -175,14 +227,15 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun PlaylistAudioAppScreen(
+    playlistUrl: String,
+    folderName: String,
     selectedFolderLabel: String,
     logText: String,
+    onPlaylistUrlChange: (String) -> Unit,
+    onFolderNameChange: (String) -> Unit,
     onChooseFolderClick: () -> Unit,
     onStartDownloadClick: (String, String) -> Unit
 ) {
-    var playlistUrl by remember { mutableStateOf("") }
-    var folderName by remember { mutableStateOf("") }
-
     Scaffold(
         modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
@@ -201,14 +254,14 @@ fun PlaylistAudioAppScreen(
 
             OutlinedTextField(
                 value = playlistUrl,
-                onValueChange = { playlistUrl = it },
+                onValueChange = onPlaylistUrlChange,
                 label = { Text("Enter playlist URL") },
                 modifier = Modifier.fillMaxWidth()
             )
 
             OutlinedTextField(
                 value = folderName,
-                onValueChange = { folderName = it },
+                onValueChange = onFolderNameChange,
                 label = { Text("Enter folder name") },
                 modifier = Modifier.fillMaxWidth()
             )
