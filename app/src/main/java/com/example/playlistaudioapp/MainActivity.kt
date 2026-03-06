@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
     private var isProcessing by mutableStateOf(false)
     private var playlistUrlState by mutableStateOf("")
     private var folderNameState by mutableStateOf("")
+    private var areLogsVisible by mutableStateOf(false)
 
     private val folderPickerLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -83,6 +84,7 @@ class MainActivity : ComponentActivity() {
                 statusText = statusTextState,
                 logText = logTextState,
                 isProcessing = isProcessing,
+                areLogsVisible = areLogsVisible,
                 onPlaylistUrlChange = {
                     playlistUrlState = it
                     savePlaylistUrl(it)
@@ -132,6 +134,9 @@ class MainActivity : ComponentActivity() {
 
                         addLog(result)
                     }
+                },
+                onToggleLogsClick = {
+                    areLogsVisible = !areLogsVisible
                 }
             )
         }
@@ -276,10 +281,12 @@ fun PlaylistAudioAppScreen(
     statusText: String,
     logText: String,
     isProcessing: Boolean,
+    areLogsVisible: Boolean,
     onPlaylistUrlChange: (String) -> Unit,
     onFolderNameChange: (String) -> Unit,
     onChooseFolderClick: () -> Unit,
-    onStartDownloadClick: (String, String) -> Unit
+    onStartDownloadClick: (String, String) -> Unit,
+    onToggleLogsClick: () -> Unit
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize()
@@ -347,16 +354,31 @@ fun PlaylistAudioAppScreen(
                 fontSize = 16.sp
             )
 
-            Text(
-                text = "Log history:",
-                fontSize = 16.sp
-            )
+            Button(
+                onClick = onToggleLogsClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (areLogsVisible) {
+                        "Hide Logs"
+                    } else {
+                        "Show Logs"
+                    }
+                )
+            }
 
-            Text(
-                text = logText,
-                fontSize = 16.sp,
-                modifier = Modifier.padding(top = 4.dp)
-            )
+            if (areLogsVisible) {
+                Text(
+                    text = "Log history:",
+                    fontSize = 16.sp
+                )
+
+                Text(
+                    text = logText,
+                    fontSize = 16.sp,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
         }
     }
 }
