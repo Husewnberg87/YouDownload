@@ -1,7 +1,6 @@
 package com.example.playlistaudioapp
 
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.content.Context
 import android.content.Intent
@@ -30,6 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
 
@@ -37,7 +39,7 @@ class MainActivity : ComponentActivity() {
 
     private var selectedFolderUri by mutableStateOf<Uri?>(null)
     private var selectedFolderLabel by mutableStateOf("No folder selected yet")
-    private var logTextState by mutableStateOf("Logs will appear here...")
+    private var logTextState by mutableStateOf("No logs yet")
     private var statusTextState by mutableStateOf("Idle")
     private var isProcessing by mutableStateOf(false)
     private var playlistUrlState by mutableStateOf("")
@@ -56,10 +58,10 @@ class MainActivity : ComponentActivity() {
                 saveFolderUri(uri)
 
                 statusTextState = "Ready"
-                logTextState = "Folder selected successfully"
+                addLog("Folder selected successfully")
             } else {
                 statusTextState = "Idle"
-                logTextState = "Folder selection canceled"
+                addLog("Folder selection canceled")
             }
         }
 
@@ -105,17 +107,15 @@ class MainActivity : ComponentActivity() {
 
                     if (validationMessage != null) {
                         statusTextState = "Error"
-                        logTextState = validationMessage
+                        addLog(validationMessage)
                         return@PlaylistAudioAppScreen
                     }
 
                     isProcessing = true
                     statusTextState = "Working"
-                    logTextState = "Creating test file..."
+                    addLog("Creating test file...")
 
                     lifecycleScope.launch {
-                        delay(2000)
-
                         val result = createTestFile(
                             folderUri = selectedFolderUri!!,
                             playlistUrl = currentPlaylistUrl.trim(),
@@ -130,10 +130,21 @@ class MainActivity : ComponentActivity() {
                             statusTextState = "Error"
                         }
 
-                        logTextState = result
+                        addLog(result)
                     }
                 }
             )
+        }
+    }
+
+    private fun addLog(message: String) {
+        val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        val newEntry = "[$timestamp] $message"
+
+        logTextState = if (logTextState == "No logs yet") {
+            newEntry
+        } else {
+            "$newEntry\n\n$logTextState"
         }
     }
 
@@ -165,7 +176,7 @@ class MainActivity : ComponentActivity() {
             selectedFolderUri = uri
             selectedFolderLabel = extractFolderLabel(uri)
             statusTextState = "Ready"
-            logTextState = "Previous folder restored"
+            addLog("Previous folder restored")
         }
     }
 
@@ -248,15 +259,11 @@ class MainActivity : ComponentActivity() {
 
             """
                 Test file created successfully
-                
-                Subfolder:
-                $safeFolderName
-                
-                File:
-                test.txt
+                Subfolder: $safeFolderName
+                File: test.txt
             """.trimIndent()
         } catch (e: Exception) {
-            "Error while creating test file:\n${e.message}"
+            "Error while creating test file: ${e.message}"
         }
     }
 }
@@ -341,7 +348,7 @@ fun PlaylistAudioAppScreen(
             )
 
             Text(
-                text = "Log:",
+                text = "Log history:",
                 fontSize = 16.sp
             )
 
